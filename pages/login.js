@@ -3,6 +3,16 @@ import { useRouter } from "next/router";
 import AuthShell from "../components/AuthShell";
 import { supabase } from "../lib/supabase";
 
+const traduzir = (error) => {
+  const m = (error.message || "").toLowerCase();
+  if (m.includes("invalid login")) return "E-mail ou senha incorretos.";
+  if (m.includes("not confirmed")) return "Confirme seu e-mail antes de entrar.";
+  if (m.includes("rate limit")) return "Muitas tentativas. Espere um pouco e tente de novo.";
+  if (m.includes("invalid api key")) return "Chave do Supabase inválida. Confira as variáveis de ambiente.";
+  if (m.includes("failed to fetch")) return "Não consegui falar com o Supabase. Confira a URL nas variáveis de ambiente e se o projeto não está pausado.";
+  return "Erro: " + error.message;
+};
+
 export default function Login() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -10,7 +20,6 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // se já estiver logado, vai direto para o app
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) router.replace("/");
@@ -21,15 +30,19 @@ export default function Login() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) {
-      const m = error.message || "";
-      if (m.includes("Invalid login")) return setError("E-mail ou senha incorretos.");
-      if (m.includes("not confirmed")) return setError("Confirme seu e-mail antes de entrar.");
-      return setError("Não foi possível entrar. Tente de novo.");
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (error) {
+        console.error("Erro do Supabase:", error);
+        return setError(traduzir(error));
+      }
+      router.push("/");
+    } catch (err) {
+      console.error("Erro inesperado:", err);
+      setError(traduzir(err));
+    } finally {
+      setLoading(false);
     }
-    router.push("/");
   };
 
   return (
